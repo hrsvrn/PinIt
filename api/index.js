@@ -45,7 +45,7 @@ mongoose
 
 const corsOptions = {
   origin: "*", // the client domain
-  credentials: true,
+  credentials:false,
 };
 
 app.use(cors(corsOptions));
