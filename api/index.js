@@ -1,39 +1,43 @@
-const express = require('express');
-const cors = require('cors');
+const express = require("express");
+const cors = require("cors");
 const app = express();
-const mongoose = require('mongoose');
-const User = require('./models/user');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser');
+const mongoose = require("mongoose");
+const User = require("./models/user");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 const saltRounds = 10;
-const crypto = require('crypto');
-const secret = '3e259aaa6f2a67e28ae271042e7a055c';
-const multer = require('multer');
-const storage=multer.memoryStorage();
-const uploadMiddleware=multer({ storage: storage })
-const Post = require('./models/Post')
-const fs = require('fs');
-const dotenv=require('dotenv')
-const { S3Client, PutObjectCommand,GetObjectCommand} = require("@aws-sdk/client-s3");
+const crypto = require("crypto");
+const secret = "3e259aaa6f2a67e28ae271042e7a055c";
+const multer = require("multer");
+const storage = multer.memoryStorage();
+const uploadMiddleware = multer({ storage: storage });
+const Post = require("./models/Post");
+const fs = require("fs");
+const dotenv = require("dotenv");
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-dotenv.config()
-const bucketName=process.env.BUCKET_NAME
-const bucketRegion=process.env.BUCKET_REGION
-const accessKey=process.env.ACCESS_KEY
-const secretAccessKey=process.env.SECRET_ACCESS_KEY
+dotenv.config();
+const bucketName = process.env.BUCKET_NAME;
+const bucketRegion = process.env.BUCKET_REGION;
+const accessKey = process.env.ACCESS_KEY;
+const secretAccessKey = process.env.SECRET_ACCESS_KEY;
 const s3 = new S3Client({
   credentials: {
     accessKeyId: accessKey,
     secretAccessKey: secretAccessKey,
   },
-  region: bucketRegion
+  region: bucketRegion,
 });
 
-
-mongoose.connect(process.env.MONGODB)
+mongoose
+  .connect(process.env.MONGODB)
   .then(() => {
-    console.log('connected to mongodb');
+    console.log("connected to mongodb");
   })
   .catch((error) => {
     console.log(error);
@@ -41,19 +45,22 @@ mongoose.connect(process.env.MONGODB)
 
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors({ credentials: true, origin: 'http://localhost:3000' }));
-app.use('/uploads',express.static(__dirname+'/uploads'))
+app.use(cors({ credentials: true, origin: "http://localhost:3000" }));
+app.use("/uploads", express.static(__dirname + "/uploads"));
 const port = 4000;
 
 app.listen(port, () => {
   console.log(`server running on port ${port}`);
 });
 
-app.post('/register', async (req, res) => {
+app.post("/register", async (req, res) => {
   const { username, password } = req.body;
   try {
     const hashedPassword = bcrypt.hashSync(password, saltRounds);
-    const userDoc = await User.create({ username: username, password: hashedPassword });
+    const userDoc = await User.create({
+      username: username,
+      password: hashedPassword,
+    });
     res.json(userDoc);
   } catch (e) {
     console.error(e);
@@ -61,25 +68,25 @@ app.post('/register', async (req, res) => {
   }
 });
 
-app.post('/login', async (req, res) => {
+app.post("/login", async (req, res) => {
   const { username, password } = req.body;
   try {
     const userDoc = await User.findOne({ username });
     if (!userDoc) {
-      return res.status(400).json('wrong credentials');
+      return res.status(400).json({ error: "wrong credentials" });
     }
     const passOk = bcrypt.compareSync(password, userDoc.password);
     if (passOk) {
       // logged in
       jwt.sign({ username, id: userDoc._id }, secret, {}, (err, token) => {
         if (err) throw err;
-        res.cookie('token', token).json({
+        res.cookie("token", token).json({
           id: userDoc._id,
           username,
         });
       });
     } else {
-      res.status(400).json('wrong credentials');
+      res.status(400).json({ error: "wrong credentials" });
     }
   } catch (e) {
     console.error(e);
@@ -87,26 +94,24 @@ app.post('/login', async (req, res) => {
   }
 });
 
-app.get('/profile', (req, res) => {
-    const {token}=req.cookies;
-    jwt.verify(token,secret,{},(err,info)=>{
-        if(err) throw err;
-        res.json(info);
-    })
+app.get("/profile", (req, res) => {
+  const { token } = req.cookies;
+  jwt.verify(token, secret, {}, (err, info) => {
+    if (err) {
+      console.log(err);
+      return res.status(400).json({ error: "Invalid token" });
+    }
+    // Add your logic here to handle the verified token
+  });
 });
 
-
-
-
-app.post('/logout',(req, res) => {
-    res.cookie('token', '').json('ok');
+app.post("/logout", (req, res) => {
+  res.cookie("token", "").json("ok");
 });
 
-
-
-app.post('/post', uploadMiddleware.single('file'), async (req, res) => {
+app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
   const { originalname, buffer, mimetype } = req.file;
-  const parts = originalname.split('.');
+  const parts = originalname.split(".");
   const ext = parts[parts.length - 1];
   const randomImageName = `${Date.now()}-${originalname}`;
   req.file.randomImageName = randomImageName;
@@ -126,12 +131,12 @@ app.post('/post', uploadMiddleware.single('file'), async (req, res) => {
     imageURL = `https://${bucketName}.s3.${process.env.BUCKET_REGION}.amazonaws.com/${req.file.randomImageName}`;
   } catch (err) {
     console.log(err);
-    return res.status(500).json({ error: 'Error uploading image to S3' });
+    return res.status(500).json({ error: "Error uploading image to S3" });
   }
 
   const { token } = req.cookies;
   jwt.verify(token, secret, {}, async (err, info) => {
-    if (err) return res.status(401).json({ error: 'Unauthorized' });
+    if (err) return res.status(401).json({ error: "Unauthorized" });
     const { title, summary, content } = req.body;
     try {
       const postDoc = await Post.create({
@@ -143,23 +148,22 @@ app.post('/post', uploadMiddleware.single('file'), async (req, res) => {
       });
       res.json(postDoc);
     } catch (err) {
-      res.status(500).json({ error: 'Error creating post' });
+      res.status(500).json({ error: "Error creating post" });
     }
   });
 });
 
-app.get('/post', async (req,res) => {
-  
+app.get("/post", async (req, res) => {
   res.json(
     await Post.find()
-      .populate('author', ['username'])
-      .sort({createdAt: -1})
+      .populate("author", ["username"])
+      .sort({ createdAt: -1 })
       .limit(20)
   );
 });
 
-app.get('/post/:id', async (req, res) => {
-  const {id} = req.params;
-  const postDoc = await Post.findById(id).populate('author', ['username']);
+app.get("/post/:id", async (req, res) => {
+  const { id } = req.params;
+  const postDoc = await Post.findById(id).populate("author", ["username"]);
   res.json(postDoc);
 })
