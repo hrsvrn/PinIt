@@ -44,7 +44,7 @@ mongoose
   });
 
 const corsOptions = {
-  origin: "*", // the client domain
+  origin: "https://blogs.hrsvrn.me", // the client domain
   credentials:false,
 };
 
