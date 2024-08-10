@@ -117,15 +117,16 @@ app.post("/logout", (req, res) => {
 app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
   const { originalname, buffer, mimetype } = req.file;
   const parts = originalname.split(".");
-  const ext = parts[parts.length - 1];
   const randomImageName = `${Date.now()}-${originalname}`;
   req.file.randomImageName = randomImageName;
+
   const params = {
     Bucket: bucketName,
     Key: req.file.randomImageName,
     Body: buffer,
     ContentType: mimetype,
   };
+
   const command = new PutObjectCommand(params);
   let imageURL;
 
@@ -135,13 +136,18 @@ app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
     // Generate a public URL
     imageURL = `https://${bucketName}.s3.${process.env.BUCKET_REGION}.amazonaws.com/${req.file.randomImageName}`;
   } catch (err) {
-    console.log(err);
+    console.error(err); // Use console.error for error logging
     return res.status(500).json({ error: "Error uploading image to S3" });
   }
 
   const { token } = req.cookies;
-  jwt.verify(token, secret, {}, async (err, info) => {
-    if (err) return res.status(401).json({ error: "Unauthorized" });
+
+  jwt.verify(token, secret, async (err, info) => {
+    if (err) {
+      console.error(err); // Log the error for easier debugging
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const { title, summary, content } = req.body;
     try {
       const postDoc = await Post.create({
@@ -151,8 +157,10 @@ app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
         imageURL,
         author: info.id,
       });
-      res.json(postDoc);
+
+      res.status(201).json(postDoc); // Status 201 for successful resource creation
     } catch (err) {
+      console.error(err); // Log the error
       res.status(500).json({ error: "Error creating post" });
     }
   });
