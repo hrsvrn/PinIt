@@ -7,12 +7,29 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const saltRounds = 10;
+const crypto = require('crypto');
 const secret = '3e259aaa6f2a67e28ae271042e7a055c';
 const multer = require('multer');
-const uploadMiddleware=multer({ dest: 'uploads/' })
+const storage=multer.memoryStorage();
+const uploadMiddleware=multer({ storage: storage })
 const Post = require('./models/Post')
 const fs = require('fs');
-const dotenv=require('dotenv').config()
+const dotenv=require('dotenv')
+const { S3Client, PutObjectCommand,GetObjectCommand} = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+dotenv.config()
+const bucketName=process.env.BUCKET_NAME
+const bucketRegion=process.env.BUCKET_REGION
+const accessKey=process.env.ACCESS_KEY
+const secretAccessKey=process.env.SECRET_ACCESS_KEY
+const s3 = new S3Client({
+  credentials: {
+    accessKeyId: accessKey,
+    secretAccessKey: secretAccessKey,
+  },
+  region: bucketRegion
+});
+
 
 mongoose.connect(process.env.MONGODB)
   .then(() => {
@@ -86,30 +103,53 @@ app.post('/logout',(req, res) => {
 });
 
 
-app.post('/post', uploadMiddleware.single('file'), async (req,res) => {
-  const {originalname,path} = req.file;
+
+app.post('/post', uploadMiddleware.single('file'), async (req, res) => {
+  const { originalname, buffer, mimetype } = req.file;
   const parts = originalname.split('.');
   const ext = parts[parts.length - 1];
-  const newPath = path+'.'+ext;
-  fs.renameSync(path, newPath);
+  const randomImageName = `${Date.now()}-${originalname}`;
+  req.file.randomImageName = randomImageName;
+  const params = {
+    Bucket: bucketName,
+    Key: req.file.randomImageName,
+    Body: buffer,
+    ContentType: mimetype,
+  };
+  const command = new PutObjectCommand(params);
+  let imageURL;
 
-  const {token} = req.cookies;
-  jwt.verify(token, secret, {}, async (err,info) => {
-    if (err) throw err;
-    const {title,summary,content} = req.body;
-    const postDoc = await Post.create({
-      title,
-      summary,
-      content,
-      cover:newPath,
-      author:info.id,
-    });
-    res.json(postDoc);
+  try {
+    await s3.send(command);
+
+    // Generate a public URL
+    imageURL = `https://${bucketName}.s3.${process.env.BUCKET_REGION}.amazonaws.com/${req.file.randomImageName}`;
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ error: 'Error uploading image to S3' });
+  }
+
+  const { token } = req.cookies;
+  jwt.verify(token, secret, {}, async (err, info) => {
+    if (err) return res.status(401).json({ error: 'Unauthorized' });
+    const { title, summary, content } = req.body;
+    try {
+      const postDoc = await Post.create({
+        title,
+        summary,
+        content,
+        imageURL,
+        author: info.id,
+      });
+      res.json(postDoc);
+    } catch (err) {
+      res.status(500).json({ error: 'Error creating post' });
+    }
   });
-
 });
 
 app.get('/post', async (req,res) => {
+  
   res.json(
     await Post.find()
       .populate('author', ['username'])

@@ -1,11 +1,12 @@
 import React from 'react';
 import {formatISO9075} from "date-fns"
-export default function Post({title, summary, cover, content ,createdAt,author}) {
+export default function Post({title, summary, imageURL, content ,createdAt,author}) {
   return (
     <div className="post">
       <div className="image">
         <img
-          src={'http://localhost:4000'+cover}
+          src={imageURL}
+          height="200px"
           alt="Post cover"
         />
       </div>
