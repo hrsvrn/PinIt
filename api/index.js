@@ -43,6 +43,12 @@ mongoose
     console.log(error);
   });
 
+const corsOptions = {
+  origin: "https://hrsvrnpins.vercel.app", // the client domain
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 app.use("/uploads", express.static(__dirname + "/uploads"));
@@ -165,4 +171,4 @@ app.get("/post/:id", async (req, res) => {
   const { id } = req.params;
   const postDoc = await Post.findById(id).populate("author", ["username"]);
   res.json(postDoc);
-})
+});
