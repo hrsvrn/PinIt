@@ -15,6 +15,7 @@ const uploadMiddleware = multer({ storage: storage });
 const Post = require("./models/Post");
 const fs = require("fs");
 const dotenv = require("dotenv");
+export const maxDuration = 5;
 const {
   S3Client,
   PutObjectCommand,
