@@ -45,7 +45,7 @@ mongoose
 
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors({ credentials: true, origin: "https://hrsvrnpins.vercel.app" }));
+app.use(cors({ credentials: true, origin: "*" }));
 app.use("/uploads", express.static(__dirname + "/uploads"));
 const port = 4000;
 
