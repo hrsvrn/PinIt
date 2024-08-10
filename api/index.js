@@ -8,7 +8,7 @@ const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 const saltRounds = 10;
 const crypto = require("crypto");
-const secret = "3e259aaa6f2a67e28ae271042e7a055c";
+const secret = process.env.JWT_SECRET || "3e259aaa6f2a67e28ae271042e7a055c"; // Use environment variable for secret
 const multer = require("multer");
 const storage = multer.memoryStorage();
 const uploadMiddleware = multer({ storage: storage });
@@ -46,7 +46,7 @@ mongoose
 
 const corsOptions = {
   origin: "https://blogs.hrsvrn.me", // the client domain
-  credentials:true,
+  credentials: true,
 };
 
 app.use(cors(corsOptions));
@@ -84,11 +84,11 @@ app.post("/login", async (req, res) => {
     const passOk = bcrypt.compareSync(password, userDoc.password);
     if (passOk) {
       // logged in
-      jwt.sign({ username, id: userDoc._id }, secret,{ expiresIn: '10d' }, (err, token) => {
+      jwt.sign({ username, id: userDoc._id }, secret, { expiresIn: '10d' }, (err, token) => {
         if (err) throw err;
-        res.cookie("token", token).json({
+        res.cookie("token", token, { httpOnly: true, secure: true, sameSite: 'Strict', maxAge: 10 * 24 * 60 * 60 * 1000 }).json({
           id: userDoc._id,
-          username,s
+          username,
         });
       });
     } else {
@@ -107,12 +107,12 @@ app.get("/profile", (req, res) => {
       console.log(err);
       return res.status(400).json({ error: "Invalid token" });
     }
-    // Add your logic here to handle the verified token
+    res.json(info); // Return user info if token is valid
   });
 });
 
 app.post("/logout", (req, res) => {
-  res.cookie("token", "").json("ok");
+  res.cookie("token", "", { httpOnly: true, secure: true, sameSite: 'Strict', maxAge: 0 }).json("ok");
 });
 
 app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
